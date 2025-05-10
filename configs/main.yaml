@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - model: parseq
-  - charset: 64_jawi
+  - charset: 80_jawi
   - dataset: jawi
 
 model:
@@ -26,14 +26,14 @@ data:
   charset_test: ${model.charset_test}
   max_label_length: ${model.max_label_length}
   remove_whitespace: true
-  normalize_unicode: true
+  normalize_unicode: false
   augment: true
   num_workers: 2
 
 trainer:
   _target_: pytorch_lightning.Trainer
   _convert_: all
-  val_check_interval: 30
+  val_check_interval: 10
   #max_steps: 169680  # 20 epochs x 8484 steps (for batch size = 384, real data)
   max_epochs: 20
   gradient_clip_val: 20
