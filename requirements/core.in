@@ -1,6 +1,6 @@
 -c ${CONSTRAINTS}
 
-torch >=2.0.0
+torch ==2.5.1+cu121
 torchvision >=0.15.0
 timm >=0.6.5
 pytorch-lightning >=2.0.0  # TODO: refactor code to separate model from training code.
