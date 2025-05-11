@@ -4,7 +4,6 @@ data:
 
   # training and validation folders
   train_dir: train/jawi          # → data/train/jawi
-  val_dir:   val/jawi            # → data/val/jawi
 
   # test sets — each entry is joined directly with root_dir
   test_sets: [test/jawi]         # → data/test/jawi
