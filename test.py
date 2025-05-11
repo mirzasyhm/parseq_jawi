@@ -83,11 +83,13 @@ def main():
     args, unknown = parser.parse_known_args()
     kwargs = parse_model_args(unknown)
 
-    charset_test = string.digits + string.ascii_lowercase
-    if args.cased:
-        charset_test += string.ascii_uppercase
-    if args.punctuation:
-        charset_test += string.punctuation
+    charset_test = (
+    "0123456789۰۱۲٢۳۴۵۶۷۸۹"
+    "اآأؤإءئۓۂئےۍېىيےی"
+    "بپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھ"
+    "ڽضئکڤݢۏ"
+    "-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~"
+    )
     kwargs.update({'charset_test': charset_test})
     print(f'Additional keyword arguments: {kwargs}')
 
