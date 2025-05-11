@@ -19,8 +19,9 @@ model:
 data:
   _target_: strhub.data.module.SceneTextDataModule
   root_dir: data
-  train_dir: train/jawi
-  test_dir:  test
+  train_dir: ${data.root_dir}/${dataset.train_dir}   # data/train/jawi
+  val_dir:   ${data.root_dir}/${dataset.val_dir}     # data/val/jawi
+  test_sets: ${dataset.test_sets}                    # ['test/jawi']
   batch_size: ${model.batch_size}
   img_size: ${model.img_size}
   charset_train: ${model.charset_train}
