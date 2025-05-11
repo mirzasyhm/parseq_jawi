@@ -1,11 +1,4 @@
 # @package _global_
 data:
-  root_dir: data
-
-  # training and validation folders
-  train_dir: train/jawi          # → data/train/jawi
-
-  # test sets — each entry is joined directly with root_dir
-  test_sets: [test/jawi]         # → data/test/jawi
-
+  train_dir: jawi          
   num_workers: 2

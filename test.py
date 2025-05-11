@@ -75,7 +75,9 @@ def main():
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--cased', action='store_true', default=False, help='Cased comparison')
     parser.add_argument('--punctuation', action='store_true', default=False, help='Check punctuation')
+    parser.add_argument('--std', action='store_true', default=False, help='Evaluate on standard benchmark datasets')
     parser.add_argument('--new', action='store_true', default=False, help='Evaluate on new benchmark datasets')
+    parser.add_argument('--custom', action='store_true', default=True, help='Evaluate on custom personal datasets')
     parser.add_argument('--rotation', type=int, default=0, help='Angle of rotation (counter clockwise) in degrees.')
     parser.add_argument('--device', default='cuda')
     args, unknown = parser.parse_known_args()
@@ -104,7 +106,11 @@ def main():
         rotation=args.rotation,
     )
 
-    test_set = SceneTextDataModule.TEST_BENCHMARK_SUB + SceneTextDataModule.TEST_BENCHMARK
+    test_set = tuple()
+    if args.std:
+        test_set = SceneTextDataModule.TEST_BENCHMARK_SUB + SceneTextDataModule.TEST_BENCHMARK
+    if args.custom:
+        test_set += SceneTextDataModule.TEST_CUSTOM
     if args.new:
         test_set += SceneTextDataModule.TEST_NEW
     test_set = sorted(set(test_set))
@@ -130,10 +136,12 @@ def main():
         mean_label_length = label_length / total
         results[name] = Result(name, total, accuracy, mean_ned, mean_conf, mean_label_length)
 
-    result_groups = {
-        'Benchmark (Subset)': SceneTextDataModule.TEST_BENCHMARK_SUB,
-        'Benchmark': SceneTextDataModule.TEST_BENCHMARK,
-    }
+    result_groups = dict()
+    if args.std:
+        result_groups.update({'Benchmark (Subset)': SceneTextDataModule.TEST_BENCHMARK_SUB})
+        result_groups.update({'Benchmark': SceneTextDataModule.TEST_BENCHMARK})
+    if args.custom:
+        result_groups.update({'Custom': SceneTextDataModule.TEST_CUSTOM})
     if args.new:
         result_groups.update({'New': SceneTextDataModule.TEST_NEW})
     with open(args.checkpoint + '.log.txt', 'w') as f:
