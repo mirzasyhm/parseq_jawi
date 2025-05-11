@@ -1,43 +1,49 @@
 import os
 import sys
-# Add your project root (where strhub/ lives) to Python path
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, PROJECT_ROOT)
-
-import torch
+from pytorch_lightning.utilities.cloud_io import load as pl_load
 from strhub.models.utils import load_from_checkpoint
 from strhub.data.dataset import LmdbDataset
 from torch.utils.data import DataLoader
+import torch
 import lmdb
 import io
 from PIL import Image
 
 def check_checkpoint_quality(ckpt_path, lmdb_path, max_label_len=25, sample_count=5):
-    # Load model
-    model = load_from_checkpoint(ckpt_path).eval().cuda()
-    # Print model stats
+    # 1️⃣ Load raw checkpoint to extract hyperparameters
+    raw = pl_load(ckpt_path, map_location="cpu")
+    hp = raw.get('hyper_parameters', raw.get('hyperparameters', {}))
+    model_cfg = hp.get('model', {})
+    charset = model_cfg.get('charset_train') or model_cfg.get('charset_test')
+    if charset is None:
+        print("❌ Could not find charset_train or charset_test in checkpoint hyperparameters.")
+        return
+    print(f"✅ Checkpoint charset length: {len(charset)}")
+
+    # 2️⃣ Instantiate model and move to GPU if available
+    model = load_from_checkpoint(ckpt_path).eval()
+    if torch.cuda.is_available():
+        model = model.cuda()
     total_params = sum(p.numel() for p in model.parameters())
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    trainable   = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Total parameters   : {total_params:,}")
     print(f"Trainable params   : {trainable:,}")
-    # Charset size
-    charset = getattr(model.model, "charset", None)
-    print(f"Charset length     : {len(charset) if charset is not None else 'N/A'}")
 
-    # Load dataset to see how many samples and show some predictions
+    # 3️⃣ Load dataset with extracted charset
     ds = LmdbDataset(lmdb_path, charset, max_label_len)
     print(f"Dataset length seen by LmdbDataset: {len(ds)}")
 
-    # DataLoader for a few samples
-    loader = DataLoader(ds, batch_size=1, num_workers=2, shuffle=False)
+    # 4️⃣ Spot-check a few predictions
+    loader = DataLoader(ds, batch_size=1, num_workers=4, shuffle=False)
     print("\nSample predictions:")
     for i, (img_tensor, label) in enumerate(loader):
         if i >= sample_count:
             break
-        # Convert tensor back to PIL for prediction if needed
-        img = Image.fromarray((img_tensor[0].permute(1,2,0).cpu().numpy() * 255).astype('uint8'))
+        # convert tensor to PIL
+        arr = (img_tensor[0].permute(1,2,0).cpu().numpy() * 255).astype('uint8')
+        img = Image.fromarray(arr)
         pred = model.predict([img])[0]
-        print(f"{i+1}. GT='{label[0]}'  ->  PRED='{pred}'")
+        print(f"{i+1}. GT='{' '.join(label)}'  ->  PRED='{pred}'")
 
 if __name__ == "__main__":
     import argparse
