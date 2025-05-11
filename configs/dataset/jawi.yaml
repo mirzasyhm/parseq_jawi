@@ -1,4 +1,10 @@
+# configs/dataset/jawi.yaml
 # @package _global_
 data:
-  train_dir: jawi
+  # Your training data (unchanged)
+  train_dir: train/jawi          # resolved under data.root_dir
+  # NEW: where all test sets live
+  test_dir:  test
+  # NEW: evaluate exactly one sub‑folder inside test_dir
+  test_sets: [jawi]              # <- make sure data/test/jawi/data.mdb exists
   num_workers: 2

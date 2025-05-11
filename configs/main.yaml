@@ -9,9 +9,9 @@ model:
   img_size: [ 32, 128 ]  # [ height, width ]
   max_label_length: 25
   # The ordering in charset_train matters. It determines the token IDs assigned to each character.
-  charset_train: ???
+  charset_train: ${model.charset_train}
   # For charset_test, ordering doesn't matter.
-  charset_test: "0123456789abcdefghijklmnopqrstuvwxyz"
+  charset_test: ${model.charset_train}
   batch_size: 384
   weight_decay: 0.0
   warmup_pct: 0.075  # equivalent to 1.5 epochs of warm up
@@ -19,11 +19,12 @@ model:
 data:
   _target_: strhub.data.module.SceneTextDataModule
   root_dir: data
-  train_dir: ???
+  train_dir: train/jawi
+  test_dir:  test
   batch_size: ${model.batch_size}
   img_size: ${model.img_size}
   charset_train: ${model.charset_train}
-  charset_test: ${model.charset_test}
+  charset_test: ${model.charset_train}
   max_label_length: ${model.max_label_length}
   remove_whitespace: true
   normalize_unicode: false
