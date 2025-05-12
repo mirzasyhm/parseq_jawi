@@ -22,7 +22,11 @@ from strhub.data.module import SceneTextDataModule
 from strhub.models.utils import load_from_checkpoint
 
 # === HARD-CODED CHARSET (training & testing) ===
-HARD_CODED_CHARSET = (" 0123456789۰۱۲٢۳۴۵۶۷۸۹اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~")
+HARD_CODED_CHARSET = (
+    "0123456789۰۱۲٢۳۴۵۶۷۸۹"  # digits
+    "اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ"  # Jawi letters
+    "-\u200c!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~"        # punctuation & special
+)
 
 @dataclass
 class Result:
@@ -99,10 +103,21 @@ def main():
 
     # debug print first 30 GT/pred pairs
     printed = 0
-    print("\n--- First 30 GT vs Prediction ---")
+    print("--- First 30 GT vs Prediction ---")
     for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc="Printing Debug")):
         out = model.test_step((imgs.to(device), labels), batch_idx)['output']
-        preds = out.preds if hasattr(out, 'preds') else out.predictions
+        # Inspect available attributes on first iteration
+        if printed == 0:
+            attrs = [a for a in dir(out) if not a.startswith('_')]
+            print("BatchResult attributes:", attrs)
+        # Attempt to retrieve predictions
+        if hasattr(out, 'preds'):
+            preds = out.preds
+        elif hasattr(out, 'predictions'):
+            preds = out.predictions
+        else:
+            print("ERROR: BatchResult has no 'preds' or 'predictions'")
+            return
         for gt, pr in zip(labels, preds):
             if printed < 30:
                 print(f"{printed+1:02d}: GT='{gt}' | PR='{pr}'")
