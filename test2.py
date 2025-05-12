@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Robust test script for PARSeq Jawi OCR using SceneTextDataModule to ensure consistent image resizing.
+Robust test script for PARSeq Jawi OCR using SceneTextDataModule to ensure consistent image resizing,
+with printout of the first 30 (GT, prediction) pairs for debugging.
 Evaluates a checkpoint on the 'jawi' LMDB split and computes accuracy, 1-NED, average confidence, and average label length.
 Usage:
     python test.py \
@@ -36,7 +37,7 @@ class Result:
 def print_table(results: list[Result], file=None):
     w = max(len(r.dataset) for r in results + [Result('Combined',0,0,0,0,0)])
     header = f"| {'Dataset':<{w}} | # samples | Accuracy | 1 - NED | Confidence | Label Length |"
-    sep    = f"|:{'-'*w}---------------------------------------------------"
+    sep    = f"|:{'-'*w}:|-----------|----------|---------|------------|--------------|"
     print(header, file=file)
     print(sep, file=file)
     # Combined
@@ -53,7 +54,7 @@ def print_table(results: list[Result], file=None):
     comb.ned          /= comb.num_samples
     comb.confidence   /= comb.num_samples
     comb.label_length /= comb.num_samples
-    print(f"|:{'-'*w}:|-----------|----------|---------|------------|--------------|", file=file)
+    print(sep, file=file)
     print(f"| {comb.dataset:<{w}} | {comb.num_samples:>9} | {comb.accuracy:>8.2f} | {comb.ned:>7.2f} | {comb.confidence:>10.2f} | {comb.label_length:>12.2f} |", file=file)
 
 
@@ -91,19 +92,38 @@ def main():
     )
 
     # iterate over 'jawi' split only
-    test_sets = {name: dl for name, dl in dm.test_dataloaders(SceneTextDataModule.TEST_CUSTOM).items() if name=='jawi'}
+    loaders = dm.test_dataloaders(SceneTextDataModule.TEST_CUSTOM)
+    if 'jawi' not in loaders:
+        raise KeyError("'jawi' split not found in TEST_CUSTOM sets")
+    loader = loaders['jawi']
+
+    # debug print first 30 GT/pred pairs
+    printed = 0
+    print("\n--- First 30 GT vs Prediction ---")
+    for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc="Printing Debug")):
+        out = model.test_step((imgs.to(device), labels), batch_idx)['output']
+        preds = out.preds if hasattr(out, 'preds') else out.predictions
+        for gt, pr in zip(labels, preds):
+            if printed < 30:
+                print(f"{printed+1:02d}: GT='{gt}' | PR='{pr}'")
+                printed += 1
+            else:
+                break
+        if printed >= 30:
+            break
+
+    # now full evaluation
     results = []
-    for name, loader in test_sets.items():
-        total=correct=0
-        ned=conf=lbl_len=0
-        for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc=name)):
-            out = model.test_step((imgs.to(device), labels), batch_idx)['output']
-            total    += out.num_samples
-            correct  += out.correct
-            ned      += out.ned
-            conf     += out.confidence
-            lbl_len  += out.label_length
-        results.append(Result(name, total, 100*correct/total, 100*(1-ned/total), 100*(conf/total), lbl_len/total))
+    total=correct=0
+    ned=conf=lbl_len=0
+    for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc="Evaluating 'jawi'")):
+        out = model.test_step((imgs.to(device), labels), batch_idx)['output']
+        total    += out.num_samples
+        correct  += out.correct
+        ned      += out.ned
+        conf     += out.confidence
+        lbl_len  += out.label_length
+    results.append(Result('jawi', total, 100*correct/total, 100*(1-ned/total), 100*(conf/total), lbl_len/total))
 
     # print
     print_table(results, file=sys.stdout)
