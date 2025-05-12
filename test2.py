@@ -52,14 +52,18 @@ def main():
     args = parser.parse_args()
 
     device = torch.device(args.device)
-
-    print(f"Using hard‑coded charset (length={len(HARD_CODED_CHARSET)}): {HARD_CODED_CHARSET}")
+    print(f"Using hard-coded charset (length={len(HARD_CODED_CHARSET)}): {HARD_CODED_CHARSET}")
 
     # Load the model with the same test charset
     model = load_from_checkpoint(
         args.checkpoint,
         charset_test=HARD_CODED_CHARSET
     ).to(device).eval()
+
+    # Retrieve max label length from model hyperparameters
+    max_label_len = getattr(model.hparams, 'max_label_length', None)
+    if max_label_len is None:
+        raise AttributeError("Model checkpoint missing 'max_label_length' in hparams.")
 
     # Prepare LMDB dataset loader
     lmdb_path = os.path.join(args.data_root, args.split, 'jawi')
@@ -68,15 +72,17 @@ def main():
 
     dataset = LmdbDataset(
         root=lmdb_path,
-        charset=HARD_CODED_CHARSET
+        charset=HARD_CODED_CHARSET,
+        max_label_len=max_label_len
     )
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        collate_fn=lambda batch: dataset.collate(batch)
+        collate_fn=dataset.collate
     )
+
 
     # Initialize accumulators
     total = correct = 0
