@@ -113,8 +113,8 @@ class LmdbDataset(Dataset):
                     continue
                 label = charset_adapter(label)
                 # We filter out samples which don't contain any supported characters
-                if not label:
-                    continue
+                #if not label:
+                #    continue
                 # Filter images that are too small.
                 if min_image_dim > 0:
                     img_key = f'image-{index:09d}'.encode()
