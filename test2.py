@@ -48,42 +48,44 @@ def edit_distance(a: str, b: str) -> int:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', required=True, help='Path to .ckpt file')
-    parser.add_argument('--data_root', default='data', help='Root directory containing splits')
-    parser.add_argument('--split', choices=['train','val','test'], default='val', help='Which dataset split to evaluate')
+    parser.add_argument('--data_root', default='data', help='Root dir with splits')
+    parser.add_argument('--split', choices=['train','val','test'], default='val', help='Dataset split')
     parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--device', default='cuda')
     args = parser.parse_args()
 
     device = torch.device(args.device)
-    print(f"Using hard-coded charset (length={len(HARD_CODED_CHARSET)}): {HARD_CODED_CHARSET}")
+    print(f"Using hard-coded charset (len={len(HARD_CODED_CHARSET)}): {HARD_CODED_CHARSET}")
 
-    # Load the model with the same test charset
+    # Load model
     model = load_from_checkpoint(
         args.checkpoint,
         charset_test=HARD_CODED_CHARSET
     ).to(device).eval()
 
-    # Retrieve max label length from model hyperparameters
+    # Get max label length from checkpoint
     max_label_len = getattr(model.hparams, 'max_label_length', None)
     if max_label_len is None:
-        raise AttributeError("Model checkpoint missing 'max_label_length' in hparams.")
+        raise AttributeError("Checkpoint missing 'max_label_length' in hparams")
 
-    # Prepare LMDB dataset loader
+    # Prepare LMDB dataset with image transform
     lmdb_path = os.path.join(args.data_root, args.split, 'jawi')
     if not os.path.isdir(lmdb_path):
-        raise FileNotFoundError(f"LMDB path not found: {lmdb_path}")
+        raise FileNotFoundError(f"LMDB not found: {lmdb_path}")
 
     dataset = LmdbDataset(
         root=lmdb_path,
         charset=HARD_CODED_CHARSET,
-        max_label_len=max_label_len
+        max_label_len=max_label_len,
+        transform=ToTensor()
     )
-    # Inline collate: stack images and gather labels
+
+    # Collate: stack tensors and gather labels
     def collate_fn(batch):
-        imgs = torch.stack([b[0] for b in batch], dim=0)
-        labels = [b[1] for b in batch]
-        return imgs, labels
+        imgs, labels = zip(*batch)
+        imgs = torch.stack(imgs, dim=0)
+        return imgs, list(labels)
 
     loader = DataLoader(
         dataset,
@@ -93,14 +95,14 @@ def main():
         collate_fn=collate_fn
     )
 
-    # Initialize accumulators
+    # Metrics
     total = correct = 0
     total_ned = 0.0
     total_conf = 0.0
     total_len = 0
 
-    # Run evaluation
-    for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc=f"Evaluating '{args.split}' split")):
+    # Evaluation loop
+    for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc=f"Eval '{args.split}'")):
         imgs = imgs.to(device)
         out = model.test_step((imgs, labels), batch_idx)['output']
 
@@ -110,7 +112,7 @@ def main():
         total_conf += out.confidence
         total_len += out.label_length
 
-    # Final metrics
+    # Compute final stats
     accuracy = 100.0 * correct / total
     one_minus_ned = 100.0 * (1 - (total_ned / total))
     mean_conf = 100.0 * (total_conf / total)
@@ -123,7 +125,6 @@ def main():
     print(f"1 - NED          : {one_minus_ned:.2f}%")
     print(f"Avg confidence   : {mean_conf:.2f}%")
     print(f"Avg label length : {avg_len:.2f}")
-
 
 if __name__ == '__main__':
     main()
