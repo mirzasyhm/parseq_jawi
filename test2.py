@@ -1,110 +1,112 @@
 #!/usr/bin/env python3
 """
-Custom test script for PARSeq Jawi OCR model with hard-coded charset and proper image transform.
-Evaluates a checkpoint on a given LMDB split and computes accuracy, normalized edit distance (1-NED), average confidence, and average label length.
+Robust test script for PARSeq Jawi OCR using SceneTextDataModule to ensure consistent image resizing.
+Evaluates a checkpoint on the 'jawi' LMDB split and computes accuracy, 1-NED, average confidence, and average label length.
 Usage:
     python test.py \
         --checkpoint path/to/ckpt.ckpt \
         --data_root data \
-        --split val \
-        --batch_size 256 \
+        --batch_size 512 \
         --num_workers 4 \
         --device cuda
 """
-import os
 import argparse
-import torch
-from torch.utils.data import DataLoader
+from dataclasses import dataclass
+import sys
 from tqdm import tqdm
-from torchvision.transforms import ToTensor
 
-from strhub.data.dataset import LmdbDataset
+import torch
+
+from strhub.data.module import SceneTextDataModule
 from strhub.models.utils import load_from_checkpoint
 
-# === HARD-CODED CHARSET ===
+# === HARD-CODED CHARSET (training & testing) ===
 HARD_CODED_CHARSET = (" 0123456789۰۱۲٢۳۴۵۶۷۸۹اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~")
 
+@dataclass
+class Result:
+    dataset: str
+    num_samples: int
+    accuracy: float
+    ned: float
+    confidence: float
+    label_length: float
 
+
+def print_table(results: list[Result], file=None):
+    w = max(len(r.dataset) for r in results + [Result('Combined',0,0,0,0,0)])
+    header = f"| {'Dataset':<{w}} | # samples | Accuracy | 1 - NED | Confidence | Label Length |"
+    sep    = f"|:{'-'*w}---------------------------------------------------"
+    print(header, file=file)
+    print(sep, file=file)
+    # Combined
+    comb = Result('Combined',0,0,0,0,0)
+    for r in results:
+        comb.num_samples += r.num_samples
+        comb.accuracy    += r.num_samples * r.accuracy
+        comb.ned         += r.num_samples * r.ned
+        comb.confidence  += r.num_samples * r.confidence
+        comb.label_length+= r.num_samples * r.label_length
+        print(f"| {r.dataset:<{w}} | {r.num_samples:>9} | {r.accuracy:>8.2f} | {r.ned:>7.2f} | {r.confidence:>10.2f} | {r.label_length:>12.2f} |", file=file)
+    # finalize combined averages
+    comb.accuracy     /= comb.num_samples
+    comb.ned          /= comb.num_samples
+    comb.confidence   /= comb.num_samples
+    comb.label_length /= comb.num_samples
+    print(f"|:{'-'*w}:|-----------|----------|---------|------------|--------------|", file=file)
+    print(f"| {comb.dataset:<{w}} | {comb.num_samples:>9} | {comb.accuracy:>8.2f} | {comb.ned:>7.2f} | {comb.confidence:>10.2f} | {comb.label_length:>12.2f} |", file=file)
+
+
+@torch.inference_mode()
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint', required=True, help='Path to .ckpt file')
-    parser.add_argument('--data_root', default='data', help='Root dir with splits')
-    parser.add_argument('--split', choices=['train','val','test'], default='val', help='Dataset split')
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--checkpoint', required=True)
+    parser.add_argument('--data_root', default='data')
+    parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--device', default='cuda')
     args = parser.parse_args()
 
     device = torch.device(args.device)
-    print(f"Using hard-coded charset (len={len(HARD_CODED_CHARSET)}): {HARD_CODED_CHARSET}")
+    print(f"Loading checkpoint on {device} with charset len={len(HARD_CODED_CHARSET)}")
 
-    # Load model
+    # load model with correct charset
     model = load_from_checkpoint(
         args.checkpoint,
         charset_test=HARD_CODED_CHARSET
-    ).to(device).eval()
+    ).eval().to(device)
+    hp = model.hparams
 
-    # Get max label length from checkpoint
-    max_label_len = getattr(model.hparams, 'max_label_length', None)
-    if max_label_len is None:
-        raise AttributeError("Checkpoint missing 'max_label_length' in hparams")
-
-    # Prepare LMDB dataset with image transform
-    lmdb_path = os.path.join(args.data_root, args.split, 'jawi')
-    if not os.path.isdir(lmdb_path):
-        raise FileNotFoundError(f"LMDB not found: {lmdb_path}")
-
-    dataset = LmdbDataset(
-        root=lmdb_path,
-        charset=HARD_CODED_CHARSET,
-        max_label_len=max_label_len,
-        transform=ToTensor()
+    # prepare datamodule: 'jawi' is under TEST_CUSTOM
+    dm = SceneTextDataModule(
+        args.data_root,
+        '_',
+        hp.img_size,
+        hp.max_label_length,
+        hp.charset_train,
+        HARD_CODED_CHARSET,
+        args.batch_size,
+        args.num_workers,
+        False
     )
 
-    # Collate: stack tensors and gather labels
-    def collate_fn(batch):
-        imgs, labels = zip(*batch)
-        imgs = torch.stack(imgs, dim=0)
-        return imgs, list(labels)
+    # iterate over 'jawi' split only
+    test_sets = {name: dl for name, dl in dm.test_dataloaders(SceneTextDataModule.TEST_CUSTOM).items() if name=='jawi'}
+    results = []
+    for name, loader in test_sets.items():
+        total=correct=0
+        ned=conf=lbl_len=0
+        for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc=name)):
+            out = model.test_step((imgs.to(device), labels), batch_idx)['output']
+            total    += out.num_samples
+            correct  += out.correct
+            ned      += out.ned
+            conf     += out.confidence
+            lbl_len  += out.label_length
+        results.append(Result(name, total, 100*correct/total, 100*(1-ned/total), 100*(conf/total), lbl_len/total))
 
-    loader = DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        collate_fn=collate_fn
-    )
+    # print
+    print_table(results, file=sys.stdout)
 
-    # Metrics
-    total = correct = 0
-    total_ned = 0.0
-    total_conf = 0.0
-    total_len = 0
-
-    # Evaluation loop
-    for batch_idx, (imgs, labels) in enumerate(tqdm(loader, desc=f"Eval '{args.split}'")):
-        imgs = imgs.to(device)
-        out = model.test_step((imgs, labels), batch_idx)['output']
-
-        total += out.num_samples
-        correct += out.correct
-        total_ned += out.ned
-        total_conf += out.confidence
-        total_len += out.label_length
-
-    # Compute final stats
-    accuracy = 100.0 * correct / total
-    one_minus_ned = 100.0 * (1 - (total_ned / total))
-    mean_conf = 100.0 * (total_conf / total)
-    avg_len = total_len / total
-
-    # Display
-    print("\n=== Test Results ===")
-    print(f"Total samples    : {total}")
-    print(f"Accuracy         : {accuracy:.2f}%")
-    print(f"1 - NED          : {one_minus_ned:.2f}%")
-    print(f"Avg confidence   : {mean_conf:.2f}%")
-    print(f"Avg label length : {avg_len:.2f}")
-
-if __name__ == '__main__':
+if __name__=='__main__':
     main()
