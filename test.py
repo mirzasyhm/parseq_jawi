@@ -95,7 +95,7 @@ def main():
         hp.img_size,
         hp.max_label_length,
         hp.charset_train,
-        hp.charset_test,
+        charset_test,
         args.batch_size,
         args.num_workers,
         False,
