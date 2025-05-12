@@ -61,7 +61,7 @@ class LmdbDataset(Dataset):
         charset: str,
         max_label_len: int,
         min_image_dim: int = 0,
-        remove_whitespace: bool = True,
+        remove_whitespace: bool = False,
         normalize_unicode: bool = False,
         unlabelled: bool = False,
         transform: Optional[Callable] = None,
