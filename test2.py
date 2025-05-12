@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Custom test script for PARSeq Jawi OCR model with hard‑coded charset.
+Custom test script for PARSeq Jawi OCR model with hard-coded charset and inline collate function.
 Evaluates a checkpoint on a given LMDB split and computes accuracy, normalized edit distance (1-NED), average confidence, and average label length.
 Usage:
     python test.py \
@@ -20,8 +20,12 @@ from tqdm import tqdm
 from strhub.data.dataset import LmdbDataset
 from strhub.models.utils import load_from_checkpoint
 
-# === HARD‑CODED CHARSET ===
-HARD_CODED_CHARSET = (" 0123456789۰۱۲٢۳۴۵۶۷۸۹اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~")
+# === HARD-CODED CHARSET ===
+HARD_CODED_CHARSET = (
+    "0123456789۰۱۲٢۳۴۵۶۷۸۹"  # digits
+    "اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ"  # Jawi letters
+    "-\u200c!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~"        # punctuation & special
+)
 
 
 def edit_distance(a: str, b: str) -> int:
@@ -75,14 +79,19 @@ def main():
         charset=HARD_CODED_CHARSET,
         max_label_len=max_label_len
     )
+    # Inline collate: stack images and gather labels
+    def collate_fn(batch):
+        imgs = torch.stack([b[0] for b in batch], dim=0)
+        labels = [b[1] for b in batch]
+        return imgs, labels
+
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        collate_fn=dataset.collate
+        collate_fn=collate_fn
     )
-
 
     # Initialize accumulators
     total = correct = 0
