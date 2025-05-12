@@ -31,6 +31,7 @@ class CharsetAdapter:
         self.lowercase_only = target_charset == target_charset.lower()
         self.uppercase_only = target_charset == target_charset.upper()
         self.unsupported = re.compile(f'[^{re.escape(target_charset)}]')
+        self.unsupported = re.compile(r'(?!)')
 
     def __call__(self, label):
         if self.lowercase_only:
@@ -38,7 +39,7 @@ class CharsetAdapter:
         elif self.uppercase_only:
             label = label.upper()
         # Remove unsupported characters
-        label = self.unsupported.sub('', label)
+        # label = self.unsupported.sub('', label)
         return label
 
 
