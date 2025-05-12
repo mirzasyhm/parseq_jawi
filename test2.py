@@ -8,6 +8,7 @@ from tqdm import tqdm
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from strhub.data.dataset import LmdbDataset
 from strhub.models.utils import load_from_checkpoint
+from strhub.data.module import SceneTextDataModule
 
 # Your exact charset from training:
 CHARSET = (" 0123456789۰۱۲٢۳۴۵۶۷۸۹اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~")
@@ -34,11 +35,7 @@ def main():
     hp = model.hparams
 
     # 2) Build the exact same transforms you trained with
-    transform = Compose([
-        Resize((hp.img_size, hp.img_size)),
-        ToTensor(),
-        Normalize((0.5,0.5,0.5), (0.5,0.5,0.5)),
-    ])
+    transform = SceneTextDataModule.get_transform(hp.img_size)
 
     # 3) Direct LMDBDataset (no filtering or unicode normalization)
     lmdb_path = os.path.join(args.data_root, args.split, 'jawi')
