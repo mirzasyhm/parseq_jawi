@@ -93,7 +93,8 @@ class LmdbDataset(Dataset):
         return self._env
 
     def _preprocess_labels(self, charset, remove_whitespace, normalize_unicode, max_label_len, min_image_dim):
-        charset_adapter = CharsetAdapter(charset)
+        #charset_adapter = CharsetAdapter(charset)
+        charset_adapter = lambda label: label
         with self._create_env() as env, env.begin() as txn:
             num_samples = int(txn.get('num-samples'.encode()))
             if self.unlabelled:
