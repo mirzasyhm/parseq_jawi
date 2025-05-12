@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Custom test script for PARSeq Jawi OCR model with hard-coded charset and inline collate function.
+Custom test script for PARSeq Jawi OCR model with hard-coded charset and proper image transform.
 Evaluates a checkpoint on a given LMDB split and computes accuracy, normalized edit distance (1-NED), average confidence, and average label length.
 Usage:
     python test.py \
@@ -16,33 +16,13 @@ import argparse
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from torchvision.transforms import ToTensor
 
 from strhub.data.dataset import LmdbDataset
 from strhub.models.utils import load_from_checkpoint
 
 # === HARD-CODED CHARSET ===
-HARD_CODED_CHARSET = (
-    "0123456789۰۱۲٢۳۴۵۶۷۸۹"  # digits
-    "اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ"  # Jawi letters
-    "-\u200c!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~"        # punctuation & special
-)
-
-
-def edit_distance(a: str, b: str) -> int:
-    """Levenshtein distance."""
-    m, n = len(a), len(b)
-    dp = list(range(n + 1))
-    for i in range(1, m + 1):
-        prev = dp[0]
-        dp[0] = i
-        for j in range(1, n + 1):
-            cur = dp[j]
-            if a[i - 1] == b[j - 1]:
-                dp[j] = prev
-            else:
-                dp[j] = 1 + min(prev, dp[j - 1], dp[j])
-            prev = cur
-    return dp[n]
+HARD_CODED_CHARSET = (" 0123456789۰۱۲٢۳۴۵۶۷۸۹اآأؤإءئۓۂئےۍېىيےیبپڀتٹثٿجچحخدڈذڎرڑزژسشصضطظعغفقڤڠݢکكڭگڬلمنںوۏههةۃۀہھڽضئکڤݢۏ-‌!\"#$%&'()*+,./:;<=>?@[\\]^_`{|}~")
 
 
 def main():
