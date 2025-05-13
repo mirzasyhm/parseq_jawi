@@ -51,11 +51,6 @@ def get_swa_lr_factor(warmup_pct, swa_epoch_start, div_factor=25, final_div_fact
 
 class PrintMetricsCallback(Callback):
     """Callback to print batch & epoch metrics including loss, accuracy, learning rate."""
-    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, unused=0):
-        loss = outputs['loss'] if isinstance(outputs, dict) and 'loss' in outputs else None
-        optim = trainer.optimizers[0]
-        current_lr = optim.param_groups[0].get('lr', None)
-        print(f"[Batch {batch_idx}] loss={loss:.4f} lr={current_lr:.6e}")
 
     def on_train_epoch_end(self, trainer, pl_module):
         epoch = trainer.current_epoch
