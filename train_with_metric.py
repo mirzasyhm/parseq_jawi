@@ -33,7 +33,6 @@ from strhub.models.base import BaseSystem
 from strhub.models.utils import get_pretrained_weights
 
 # Copied from OneCycleLR
-
 def _annealing_cos(start, end, pct):
     'Cosine anneal from `start` to `end` as pct goes from 0.0 to 1.0.'
     cos_out = math.cos(math.pi * pct) + 1
@@ -61,17 +60,24 @@ class PrintMetricsCallback(Callback):
     def on_train_epoch_end(self, trainer, pl_module):
         epoch = trainer.current_epoch
         metrics = trainer.callback_metrics
-        avg_loss = metrics.get('train_loss') or metrics.get('loss')
-        avg_acc = metrics.get('train_accuracy') or metrics.get('train_acc') or metrics.get('val_accuracy')
+        avg_loss = metrics.get('train_loss') or metrics.get('loss') or 0.0
+        avg_acc = metrics.get('train_accuracy') or metrics.get('train_acc') or metrics.get('val_accuracy') or 0.0
         optim = trainer.optimizers[0]
         lr = optim.param_groups[0].get('lr', None)
-        print(f"[Epoch {epoch}] avg_loss={avg_loss:.4f} accuracy={avg_acc:.2f} lr={lr:.6e}")
+        print(f"[Epoch {epoch}] avg_loss={float(avg_loss):.4f} accuracy={float(avg_acc):.2f} lr={lr:.6e}")
 
     def on_validation_epoch_end(self, trainer, pl_module):
         epoch = trainer.current_epoch
         metrics = trainer.callback_metrics
-        val_acc = metrics.get('val_accuracy')
-        print(f"[Epoch {epoch}] val_accuracy={val_acc:.2f}")
+        val_acc = metrics.get('val_accuracy', None)
+        if val_acc is None:
+            print(f"[Epoch {epoch}] val_accuracy=N/A")
+        else:
+            try:
+                v = float(val_acc)
+            except Exception:
+                v = val_acc
+            print(f"[Epoch {epoch}] val_accuracy={v:.2f}")
 
 
 @hydra.main(config_path='configs', config_name='main', version_base='1.2')
