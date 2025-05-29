@@ -9,8 +9,8 @@ tune:
   num_samples: 10
   gpus_per_trial: 1
   lr:
-    min: 1e-4
-    max: 2e-3
+    min: 1e-5
+    max: 2e-4
   resume_dir: null
 
 hydra:
